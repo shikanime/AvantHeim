@@ -10,11 +10,21 @@ defmodule GameService.InitStaticMapSystem do
   require Logger
 
   alias GameService.MonsterBundle
+  alias GameService.NpcBundle
 
   ## System behaviour
 
   @impl true
   def run(%{partition: map_id}) do
+    Task.await_many([
+      Task.async(fn -> load_monsters(map_id) end),
+      Task.async(fn -> load_npc(map_id) end)
+    ])
+  end
+
+  ## Helpers
+
+  defp load_monsters(map_id) do
     case YamlElixir.read_from_file(map_monsters_file(map_id)) do
       {:ok, data} ->
         data
@@ -27,7 +37,18 @@ defmodule GameService.InitStaticMapSystem do
     end
   end
 
-  ## Helpers
+  defp load_npc(map_id) do
+    case YamlElixir.read_from_file(map_npcs_file(map_id)) do
+      {:ok, data} ->
+        data
+        |> normalize_npcs(map_id)
+        |> Task.async_stream(&spawn_npc/1, ordered: false, max_concurrency: max_concurrency())
+        |> Stream.run()
+
+      _ ->
+        Logger.warn("no npc found for map #{map_id}")
+    end
+  end
 
   defp max_concurrency(), do: Elixir.System.schedulers_online()
   defp priv_dir(), do: :code.priv_dir(:game_service)
@@ -46,6 +67,32 @@ defmodule GameService.InitStaticMapSystem do
   defp spawn_monster(attrs) do
     # Spawn Monster entity into system
     specs = MonsterBundle.specs(attrs)
+    {:ok, {_entity, _components}} = Command.spawn_entity(specs)
+
+    # Here we can send an entity map enter event to the map partition
+    # But it's not mendatory because the map just be created and there
+    # is no player on it
+  end
+
+  defp map_npcs_file(id) do
+    Path.join(priv_dir(), "map_npc_placement/map_#{id}_npc.yaml")
+  end
+
+  defp normalize_npcs(%{"map_id" => m, "npcs" => npcs}, map_id) when m == map_id do
+    npcs
+    |> Enum.map(
+      &Map.take(
+        &1,
+        ~w(map_npc_id vnum pos_x pos_y direction_facing can_move quest_dialog_id shop_tab_id)
+      )
+    )
+    |> Enum.map(&Map.new(&1, fn {k, v} -> {String.to_atom(k), v} end))
+    |> Enum.map(&Map.put(&1, :map_id, map_id))
+  end
+
+  defp spawn_npc(attrs) do
+    # Spawn NPC entity into system
+    specs = NpcBundle.specs(attrs)
     {:ok, {_entity, _components}} = Command.spawn_entity(specs)
 
     # Here we can send an entity map enter event to the map partition
