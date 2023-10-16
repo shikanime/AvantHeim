@@ -45,6 +45,18 @@ defmodule GameService.InitStaticMapSystem do
     end
   end
 
+  defp load_npcs(map_id) do
+    case ConfigFile.map_npcs(map_id) do
+      [] ->
+        Logger.warn("no npc found for map #{map_id}")
+
+      monsters ->
+        monsters
+        |> Task.async_stream(&spawn_npc/1, ordered: false, max_concurrency: max_concurrency())
+        |> Stream.run()
+    end
+  end
+
   defp spawn_monster(attrs) do
     # Spawn Monster entity into system
     specs = MonsterBundle.specs(attrs)

@@ -1,6 +1,6 @@
-defmodule GameService.NPCComponents do
+defmodule GameService.NpcComponents do
   @moduledoc """
-  TODO: Documentation for GameService.NPCComponents
+  TODO: Documentation for GameService.NpcComponents
   """
 
   defmodule NpcComponent do
