@@ -11,13 +11,17 @@ defmodule GameService.InitStaticMapSystem do
 
   alias GameService.ConfigFile
   alias GameService.MonsterBundle
+  alias GameService.NpcBundle
 
   ## System behaviour
 
   @impl true
   def run(%{partition: map_id}) do
-    _ = load_map_tiles(map_id)
-    _ = load_monsters(map_id)
+    Task.await_many([
+      Task.async(fn -> load_map_tiles(map_id) end),
+      Task.async(fn -> load_monsters(map_id) end),
+      Task.async(fn -> load_npcs(map_id) end)
+    ])
   end
 
   ## Helpers
@@ -44,6 +48,16 @@ defmodule GameService.InitStaticMapSystem do
   defp spawn_monster(attrs) do
     # Spawn Monster entity into system
     specs = MonsterBundle.specs(attrs)
+    {:ok, {_entity, _components}} = Command.spawn_entity(specs)
+
+    # Here we can send an entity map enter event to the map partition
+    # But it's not mendatory because the map just be created and there
+    # is no player on it
+  end
+
+  defp spawn_npc(attrs) do
+    # Spawn NPC entity into system
+    specs = NpcBundle.specs(attrs)
     {:ok, {_entity, _components}} = Command.spawn_entity(specs)
 
     # Here we can send an entity map enter event to the map partition
